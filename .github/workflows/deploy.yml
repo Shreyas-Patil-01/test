@@ -3,57 +3,50 @@ on:
   push:
     branches:
       - main
-env:
-  TF_VERSION: 1.9.x
-  TF_WORKING_DIR: './'
 jobs:
-  build:
+  terraform:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      - name: Terraform Init
-        run: |
-            terraform init -input=false
-        working-directory: ${{ env.TF_WORKING_DIR }}
-      - name: Terraform Plan
-        run: |
-            terraform plan -input=false -out=tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-      - name: Terraform Apply
-        run: |
-            terraform apply -auto-approve tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        if: github.ref == 'refs/heads/main'
-      - name: Setup SSH Key
-        run: |
-            mkdir -p ~/.ssh/
-            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-            chmod 600 ~/.ssh/id_rsa
-            ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-      - name: Deploy Flask App
-        run: |
-            ssh -o StrictHostKeyChecking=no ec2-user@${{ steps.terraform.outputs.outputs.public_ip.value }} 'cd /path/to/flask/app && pip install -r requirements.txt && python app.py'
-        if: github.ref == 'refs/heads/main'
-      - name: Create GitHub issue on failure
-        uses: actions/github-script@v6
-        if: failure()
-        with:
-          script: |
-            const issue = {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "CI/CD Pipeline failed",
-              body: `Run ID: ${context.runId}\n\nLogs: [Link to logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
-            }
-            github.issues.create(issue)
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.9.x
+        terraform_wrapper: true
+    - name: Terraform Init
+      run: terraform init -input=false
+    - name: Terraform Plan
+      run: terraform plan -input=false -out=tfplan
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
+    - name: Capture Terraform Outputs
+      id: tf_outputs
+      run: |
+        terraform output -json > tf_outputs.json
+        echo "instance_public_ip=$(jq -r '.public_ip.value' tf_outputs.json)" >> $GITHUB_ENV
+  app_deployment:
+    needs: terraform
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh/
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ env.instance_public_ip }} >> ~/.ssh/known_hosts
+    - name: Deploy App
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ec2-user@${{ env.instance_public_ip }} <<EOF
+        cd /home/ec2-user/app
+        pip install -r requirements.txt
+        nohup python app.py &
+        EOF
