@@ -5,7 +5,7 @@ on:
       - main
 env:
   AWS_REGION: us-east-1
-  TF_VERSION: 0.14.9
+  TF_VERSION: 1.7.5
   TF_INIT_CLI_OPTIONS: -input=false
   TF_CLI_OPTIONS: -input=false -auto-approve
 jobs:
