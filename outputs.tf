@@ -10,5 +10,5 @@ output "public_ip" {
 
 output "flask_app_url" {
   description = "URL to access the Flask application"
-  value       = "http://\${aws_instance.flask_app.public_ip}:8000"
+  value       = "http://${aws_instance.flask_app.public_ip}:8000"
 }
