@@ -88,6 +88,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
+
 # Create EC2 instance
 resource "aws_instance" "flask_app" {
   ami                    = var.ami_id
@@ -95,8 +96,8 @@ resource "aws_instance" "flask_app" {
   subnet_id              = data.aws_subnet.selected_subnet.id
   vpc_security_group_ids = [aws_security_group.flask_app_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
-  user_data = templatefile("\${path.module}/user_data.tftpl", {
-  app_code = file("\${path.module}/app.py")
+  user_data = templatefile("${path.module}/user_data.tftpl", {
+    app_code = file("${path.module}/app.py")
   })
   
   tags = {
