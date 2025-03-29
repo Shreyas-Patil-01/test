@@ -25,16 +25,17 @@ jobs:
           [ -d ./ ] && cd ./ || echo "Directory ./ not found, using root"
       - name: Terraform Init
         run: terraform init -input=false
-      - name: Terraform Refresh
-        run: terraform refresh
       - name: Terraform State Remove
         run: terraform state list | xargs -I {} terraform state rm {} || echo "No state to remove"
+        if: github.ref == 'refs/heads/main'
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
+        if: github.ref == 'refs/heads/main'
       - name: Terraform Plan
         run: terraform plan -input=false -out=tfplan
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
+        if: github.ref == 'refs/heads/main'
       - name: Capture Terraform Outputs
         id: tf_outputs
         run: |
